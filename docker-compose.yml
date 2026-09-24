@@ -1,0 +1,83 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ps08
+      POSTGRES_PASSWORD: ps08_password
+      POSTGRES_DB: ps08
+    ports:
+      - "5434:5432"
+    volumes:
+      - ps08_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ps08 -d ps08"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ps08:ps08_password@postgres:5432/ps08
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["celery", "-A", "app.tasks", "worker", "--loglevel=info"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ps08:ps08_password@postgres:5432/ps08
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: infra/docker/api.Dockerfile
+    command: ["celery", "-A", "app.tasks", "beat", "--loglevel=info"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ps08:ps08_password@postgres:5432/ps08
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  ps08_postgres_data:
