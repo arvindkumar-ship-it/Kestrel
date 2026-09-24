@@ -164,7 +164,7 @@
 //         <div>
 //           <div className="eyebrow">REAL-TIME SECURITY MONITORING</div>
 //           <h1>Alerts</h1>
-//           <p>Behavior anomalies detected by the PS08 risk engine.</p>
+//           <p>Behavior anomalies detected by the Kestrel risk engine.</p>
 //         </div>
 //         <div>
 //           <div className="live-chip"><i /> LIVE · 3s refresh</div>
@@ -186,7 +186,7 @@
 //           <div className="panel-head">
 //             <div>
 //               <span className="eyebrow">ALERT PATH</span>
-//               <h2>How PS08 reached this decision</h2>
+//               <h2>How Kestrel reached this decision</h2>
 //             </div>
 //             <span className={`decision ${riskLevel(selected.risk_score)}`}>
 //               {riskPct(selected.risk_score)} risk
@@ -229,7 +229,7 @@
 //     <section>
 //       <div className="page-head">
 //         <div>
-//           <div className="eyebrow">PS08 SECURITY CONSOLE</div>
+//           <div className="eyebrow">Kestrel SECURITY CONSOLE</div>
 //           <h1>Overview</h1>
 //           <p>Event-driven insider anomaly detection and response.</p>
 //         </div>
@@ -274,7 +274,7 @@
 //     setMsg("");
 //     try {
 //       await api("/events", { method: "POST", body: JSON.stringify(form) });
-//       setMsg("Event accepted by PS08.");
+//       setMsg("Event accepted by Kestrel.");
 //     } catch (err) { setMsg(err.message); }
 //   }
 
@@ -329,7 +329,7 @@
 //   return (
 //     <div className="app">
 //       <aside>
-//         <div className="brand"><div className="brand-mark">P8</div><div><b>PS08</b><span>Security Console</span></div></div>
+//         <div className="brand"><div className="brand-mark">P8</div><div><b>Kestrel</b><span>Security Console</span></div></div>
 //         <nav>
 //           {[
 //             ["overview","Overview"],
@@ -338,7 +338,7 @@
 //             ["response","Response"],
 //           ].map(([id,label]) => <button className={page===id?"active":""} onClick={()=>setPage(id)} key={id}>{label}</button>)}
 //         </nav>
-//         <div className="side-bottom"><Health /><span className="version">PS08 · local environment</span></div>
+//         <div className="side-bottom"><Health /><span className="version">Kestrel · local environment</span></div>
 //       </aside>
 //       <main>
 //         {page === "overview" && <Overview />}
@@ -537,7 +537,7 @@ function Alerts() {
         <div>
           <div className="eyebrow">REAL-TIME SECURITY MONITORING</div>
           <h1>Alerts</h1>
-          <p>Behavior anomalies detected by the PS08 risk engine.</p>
+          <p>Behavior anomalies detected by the Kestrel risk engine.</p>
         </div>
         <div>
           <div className="live-chip"><i /> LIVE · 3s refresh</div>
@@ -561,7 +561,7 @@ function Alerts() {
           <div className="panel-head">
             <div>
               <span className="eyebrow">ALERT PATH</span>
-              <h2>How PS08 reached this decision</h2>
+              <h2>How Kestrel reached this decision</h2>
             </div>
             <span className={`decision ${riskLevel(selected.risk_score)}`}>
               {riskPct(selected.risk_score)} risk
@@ -604,7 +604,7 @@ function Overview() {
     <section>
       <div className="page-head">
         <div>
-          <div className="eyebrow">PS08 SECURITY CONSOLE</div>
+          <div className="eyebrow">Kestrel SECURITY CONSOLE</div>
           <h1>Overview</h1>
           <p>Event-driven insider anomaly detection and response.</p>
         </div>
@@ -649,7 +649,7 @@ function EventForm() {
     setMsg("");
     try {
       await api("/events", { method: "POST", body: JSON.stringify(form) });
-      setMsg("Event accepted by PS08.");
+      setMsg("Event accepted by Kestrel.");
     } catch (err) { setMsg(err.message); }
   }
 
@@ -704,7 +704,7 @@ function App() {
   return (
     <div className="app">
       <aside>
-        <div className="brand"><div className="brand-mark">P8</div><div><b>PS08</b><span>Security Console</span></div></div>
+        <div className="brand"><div className="brand-mark">P8</div><div><b>Kestrel</b><span>Security Console</span></div></div>
         <nav>
           {[
             ["overview","Overview"],
@@ -713,7 +713,7 @@ function App() {
             ["response","Response"],
           ].map(([id,label]) => <button className={page===id?"active":""} onClick={()=>setPage(id)} key={id}>{label}</button>)}
         </nav>
-        <div className="side-bottom"><Health /><span className="version">PS08 · local environment</span></div>
+        <div className="side-bottom"><Health /><span className="version">Kestrel · local environment</span></div>
       </aside>
       <main>
         {page === "overview" && <Overview />}
