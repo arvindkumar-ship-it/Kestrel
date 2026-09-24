@@ -76,8 +76,8 @@ echo "+ curl -i $API/dashboard/alerts -H 'X-Session-Id: demo-sess'"
 pause
 
 step 8 "Hourly batch job, triggered on demand" "the isolation-forest batch path (feature_store -> scorer -> AlertBus) is wired, not stubbed."
-echo "+ docker compose exec celery-worker python -c \"from app.tasks import run_isolation_forest_task; run_isolation_forest_task()\""
-docker compose exec -T celery-worker python -c "from app.tasks import run_isolation_forest_task; run_isolation_forest_task()"
+echo "+ curl -X POST $API/batch/run"
+curl -s -X POST "$API/batch/run" | jq .
 echo
 echo "+ psql -c \"select actor, risk_score from alerts... \" (batch alerts use alert_type='insider_batch_anomaly')"
 psql "$PGCONN" -c "select id, risk_score, detail->>'actor_id' as actor_id, created_at from alerts where alert_type='insider_batch_anomaly' order by id desc limit 5;"

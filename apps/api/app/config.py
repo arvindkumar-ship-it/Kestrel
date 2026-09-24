@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     autonomous_actions_enabled: bool = False
     response_dry_run: bool = True  # RESPONSE_DRY_RUN env var flips to live enforcement
 
+    run_workers_inline: bool = False  # RUN_WORKERS_INLINE=true -> consumer+relay+batch run inside the API process
+    batch_trigger_token: str = ""  # if set, POST /batch/run requires header X-Batch-Token
+
     api_url: str = "http://localhost:8000"
     frontend_origin: str = "http://localhost:3000"
 

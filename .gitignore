@@ -7,4 +7,8 @@ dist/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-*.db
+*.db__pycache__/
+*.pyc
+.env
+node_modules/
+*.egg-info/

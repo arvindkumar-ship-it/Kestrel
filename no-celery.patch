@@ -1,0 +1,307 @@
+diff --git a/apps/api/app/api/v1/batch.py b/apps/api/app/api/v1/batch.py
+new file mode 100644
+index 0000000..b5ed320
+--- /dev/null
++++ b/apps/api/app/api/v1/batch.py
+@@ -0,0 +1,14 @@
++from fastapi import APIRouter, Header, HTTPException
++
++from app.config import get_settings
++from app.tasks import _run_isolation_forest
++
++router = APIRouter(tags=["batch"])
++
++
++@router.post("/batch/run")
++async def run_batch(x_batch_token: str = Header(default="")) -> dict:
++    token = get_settings().batch_trigger_token
++    if token and x_batch_token != token:
++        raise HTTPException(403, "invalid batch token")
++    return await _run_isolation_forest()
+diff --git a/apps/api/app/config.py b/apps/api/app/config.py
+index 534e45f..a95921f 100644
+--- a/apps/api/app/config.py
++++ b/apps/api/app/config.py
+@@ -15,6 +15,9 @@ class Settings(BaseSettings):
+     autonomous_actions_enabled: bool = False
+     response_dry_run: bool = True  # RESPONSE_DRY_RUN env var flips to live enforcement
+ 
++    run_workers_inline: bool = False  # RUN_WORKERS_INLINE=true -> consumer+relay+batch run inside the API process
++    batch_trigger_token: str = ""  # if set, POST /batch/run requires header X-Batch-Token
++
+     api_url: str = "http://localhost:8000"
+     frontend_origin: str = "http://localhost:3000"
+ 
+diff --git a/apps/api/app/main.py b/apps/api/app/main.py
+index 51d74d9..4c2c7e9 100644
+--- a/apps/api/app/main.py
++++ b/apps/api/app/main.py
+@@ -1,17 +1,54 @@
++import asyncio
++import logging
++from contextlib import asynccontextmanager
++
+ from fastapi import FastAPI, Request
++from fastapi.middleware.cors import CORSMiddleware
+ 
+-from app.api.v1 import dashboard, events, health, response, ws
++from app.api.v1 import batch, dashboard, events, health, response, ws
++from app.config import get_settings
+ from app.dependencies import close_redis, get_rate_abuse_detector, get_revoke_adapter, get_schema_drift_detector
+ from app.middleware.api_abuse_check import enforce_api_abuse_checks
+ from app.middleware.revocation_check import enforce_revocation_check
+-from fastapi.middleware.cors import CORSMiddleware
++from app.tasks import isolation_forest_loop
++from app.worker import run_consumer, run_relay
++
++logger = logging.getLogger(__name__)
++settings = get_settings()
++
++
++async def _supervise(name: str, fn) -> None:
++    while True:
++        try:
++            await fn()
++        except asyncio.CancelledError:
++            raise
++        except Exception:
++            logger.exception("background task %s crashed, restarting in 5s", name)
++            await asyncio.sleep(5)
+ 
+-app = FastAPI(title="PS08 Defense Platform")
+-from fastapi.middleware.cors import CORSMiddleware
++
++@asynccontextmanager
++async def lifespan(app: FastAPI):
++    tasks: list[asyncio.Task] = []
++    if settings.run_workers_inline:
++        tasks = [
++            asyncio.create_task(_supervise("consumer", run_consumer)),
++            asyncio.create_task(_supervise("relay", run_relay)),
++            asyncio.create_task(_supervise("batch", isolation_forest_loop)),
++        ]
++    yield
++    for t in tasks:
++        t.cancel()
++    await asyncio.gather(*tasks, return_exceptions=True)
++    await close_redis()
++
++
++app = FastAPI(title="PS08 Defense Platform", lifespan=lifespan)
+ 
+ app.add_middleware(
+     CORSMiddleware,
+-    allow_origins=["http://localhost:5173"],   # tumhara Vite dev origin
++    allow_origins=list({"http://localhost:5173", settings.frontend_origin}),
+     allow_credentials=True,
+     allow_methods=["*"],
+     allow_headers=["*"],
+@@ -32,9 +69,5 @@ app.include_router(health.router, prefix="/api/v1")
+ app.include_router(events.router, prefix="/api/v1")
+ app.include_router(dashboard.router, prefix="/api/v1")
+ app.include_router(response.router, prefix="/api/v1")
++app.include_router(batch.router, prefix="/api/v1")
+ app.include_router(ws.router, prefix="/api/v1")
+-
+-
+-@app.on_event("shutdown")
+-async def shutdown() -> None:
+-    await close_redis()
+diff --git a/apps/api/app/tasks.py b/apps/api/app/tasks.py
+index 1d8d803..2e64df4 100644
+--- a/apps/api/app/tasks.py
++++ b/apps/api/app/tasks.py
+@@ -1,54 +1,18 @@
+-# from celery import Celery
+-
+-# from app.config import get_settings
+-
+-# settings = get_settings()
+-# celery_app = Celery("ps08", broker=settings.redis_url, backend=settings.redis_url)
+-
+-
+-# @celery_app.task(name="app.tasks.run_isolation_forest")
+-# def run_isolation_forest_task() -> None:
+-#     """Hourly (Celery beat) batch job. Feature-vector extraction from Postgres is the one
+-#     piece intentionally left open here — it depends on which columns/window the actual
+-#     feature store ends up using; the scorer itself (IsolationForestJob) is real and tested."""
+-#     from app.insider.isolation_forest_job import IsolationForestJob
+-
+-#     IsolationForestJob()
+-
+-
+-
+-
+ import asyncio
+ import logging
+ 
+-from celery import Celery
+-
+ from app.config import get_settings
+ 
+-settings = get_settings()
+-celery_app = Celery("ps08", broker=settings.redis_url, backend=settings.redis_url)
+-celery_app.conf.beat_schedule = {
+-    "run-isolation-forest-hourly": {
+-        "task": "app.tasks.run_isolation_forest",
+-        "schedule": 3600.0,
+-    },
+-}
+-
+ logger = logging.getLogger(__name__)
+ 
+ BATCH_ALERT_THRESHOLD = 0.7
++BATCH_INTERVAL_SECONDS = 3600
+ 
+ 
+-@celery_app.task(name="app.tasks.run_isolation_forest")
+-def run_isolation_forest_task() -> None:
+-    """Hourly (Celery beat) batch job. Pulls per-actor feature vectors from the
+-    graph_edges table (extract_actor_features), scores them with the real
+-    IsolationForestJob, and raises an insider_batch_anomaly alert through the
+-    normal AlertBus for any actor whose score crosses BATCH_ALERT_THRESHOLD."""
+-    asyncio.run(_run_isolation_forest())
+-
+-
+-async def _run_isolation_forest(session_factory=None, alert_bus=None) -> None:
++async def _run_isolation_forest(session_factory=None, alert_bus=None) -> dict:
++    """Batch job (no Celery). Pulls per-actor feature vectors from graph_edges, scores them
++    with IsolationForestJob, raises insider_batch_anomaly alerts through AlertBus for any
++    actor above BATCH_ALERT_THRESHOLD. Called by the in-process loop and POST /batch/run."""
+     from app.dependencies import SessionFactory, get_alert_bus
+     from app.insider.feature_store import extract_actor_features
+     from app.insider.isolation_forest_job import IsolationForestJob
+@@ -61,9 +25,9 @@ async def _run_isolation_forest(session_factory=None, alert_bus=None) -> None:
+ 
+     if not actor_ids:
+         logger.info("isolation_forest_batch: no actors to score")
+-        return
++        return {"scored": 0, "flagged": 0}
+ 
+-    scores = IsolationForestJob().score(matrix)
++    scores = await asyncio.to_thread(IsolationForestJob().score, matrix)  # keep event loop free
+ 
+     flagged = 0
+     for actor_id, score in zip(actor_ids, scores):
+@@ -75,4 +39,15 @@ async def _run_isolation_forest(session_factory=None, alert_bus=None) -> None:
+                 {"actor_id": actor_id, "source": "isolation_forest_batch"},
+             )
+ 
+-    logger.info("isolation_forest_batch: scored=%d flagged=%d", len(actor_ids), flagged)
+\ No newline at end of file
++    logger.info("isolation_forest_batch: scored=%d flagged=%d", len(actor_ids), flagged)
++    return {"scored": len(actor_ids), "flagged": flagged}
++
++
++async def isolation_forest_loop(interval: float = BATCH_INTERVAL_SECONDS) -> None:
++    """Replaces celery beat: runs the batch job every `interval` seconds."""
++    while True:
++        await asyncio.sleep(interval)
++        try:
++            await _run_isolation_forest()
++        except Exception:
++            logger.exception("isolation_forest_batch failed")
+diff --git a/docker-compose.yml b/docker-compose.yml
+index d1fa354..ef0842a 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -47,37 +47,5 @@ services:
+       timeout: 5s
+       retries: 5
+ 
+-  celery-worker:
+-    build:
+-      context: .
+-      dockerfile: infra/docker/api.Dockerfile
+-    command: ["celery", "-A", "app.tasks", "worker", "--loglevel=info"]
+-    env_file:
+-      - .env
+-    environment:
+-      DATABASE_URL: postgresql+asyncpg://ps08:ps08_password@postgres:5432/ps08
+-      REDIS_URL: redis://redis:6379/0
+-    depends_on:
+-      postgres:
+-        condition: service_healthy
+-      redis:
+-        condition: service_healthy
+-
+-  celery-beat:
+-    build:
+-      context: .
+-      dockerfile: infra/docker/api.Dockerfile
+-    command: ["celery", "-A", "app.tasks", "beat", "--loglevel=info"]
+-    env_file:
+-      - .env
+-    environment:
+-      DATABASE_URL: postgresql+asyncpg://ps08:ps08_password@postgres:5432/ps08
+-      REDIS_URL: redis://redis:6379/0
+-    depends_on:
+-      postgres:
+-        condition: service_healthy
+-      redis:
+-        condition: service_healthy
+-
+ volumes:
+   ps08_postgres_data:
+\ No newline at end of file
+diff --git a/frontend/frontend/src/main.jsx b/frontend/frontend/src/main.jsx
+index ca3e1cb..136aa43 100644
+--- a/frontend/frontend/src/main.jsx
++++ b/frontend/frontend/src/main.jsx
+@@ -136,6 +136,16 @@ function Alerts() {
+     } catch (e) { setError(e.message); }
+   }
+ 
++  const [batchMsg, setBatchMsg] = useState("");
++  async function runBatch() {
++    setBatchMsg("running...");
++    try {
++      const r = await api("/batch/run", { method: "POST", body: "{}" });
++      setBatchMsg(`scored ${r.scored}, flagged ${r.flagged}`);
++      load();
++    } catch (e) { setBatchMsg(e.message); }
++  }
++
+   useEffect(() => {
+     load();
+     const t = setInterval(load, 3000);
+@@ -156,7 +166,11 @@ function Alerts() {
+           <h1>Alerts</h1>
+           <p>Behavior anomalies detected by the PS08 risk engine.</p>
+         </div>
+-        <div className="live-chip"><i /> LIVE · 3s refresh</div>
++        <div>
++          <div className="live-chip"><i /> LIVE · 3s refresh</div>
++          <button onClick={runBatch}>Run batch scan</button>
++          {batchMsg && <small> {batchMsg}</small>}
++        </div>
+       </div>
+ 
+       {error && <div className="error">{error}</div>}
+diff --git a/live_demo.sh b/live_demo.sh
+index 11c1922..c448e4d 100644
+--- a/live_demo.sh
++++ b/live_demo.sh
+@@ -76,8 +76,8 @@ echo "+ curl -i $API/dashboard/alerts -H 'X-Session-Id: demo-sess'"
+ pause
+ 
+ step 8 "Hourly batch job, triggered on demand" "the isolation-forest batch path (feature_store -> scorer -> AlertBus) is wired, not stubbed."
+-echo "+ docker compose exec celery-worker python -c \"from app.tasks import run_isolation_forest_task; run_isolation_forest_task()\""
+-docker compose exec -T celery-worker python -c "from app.tasks import run_isolation_forest_task; run_isolation_forest_task()"
++echo "+ curl -X POST $API/batch/run"
++curl -s -X POST "$API/batch/run" | jq .
+ echo
+ echo "+ psql -c \"select actor, risk_score from alerts... \" (batch alerts use alert_type='insider_batch_anomaly')"
+ psql "$PGCONN" -c "select id, risk_score, detail->>'actor_id' as actor_id, created_at from alerts where alert_type='insider_batch_anomaly' order by id desc limit 5;"
+diff --git a/pyproject.toml b/pyproject.toml
+index 57f8cea..9883fe0 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -16,7 +16,6 @@ dependencies = [
+     "redis>=5.0,<6.0",
+     "pydantic>=2.7,<3.0",
+     "pydantic-settings>=2.3,<3.0",
+-    "celery>=5.4,<6.0",
+     "scikit-learn>=1.5,<2.0",
+     "numpy>=2.1,<3.0",
+     "networkx>=3.4,<4.0",

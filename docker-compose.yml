@@ -47,37 +47,5 @@ services:
       timeout: 5s
       retries: 5
 
-  celery-worker:
-    build:
-      context: .
-      dockerfile: infra/docker/api.Dockerfile
-    command: ["celery", "-A", "app.tasks", "worker", "--loglevel=info"]
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://ps08:ps08_password@postgres:5432/ps08
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
-  celery-beat:
-    build:
-      context: .
-      dockerfile: infra/docker/api.Dockerfile
-    command: ["celery", "-A", "app.tasks", "beat", "--loglevel=info"]
-    env_file:
-      - .env
-    environment:
-      DATABASE_URL: postgresql+asyncpg://ps08:ps08_password@postgres:5432/ps08
-      REDIS_URL: redis://redis:6379/0
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-
 volumes:
   ps08_postgres_data:

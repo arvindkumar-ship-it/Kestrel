@@ -136,6 +136,16 @@ function Alerts() {
     } catch (e) { setError(e.message); }
   }
 
+  const [batchMsg, setBatchMsg] = useState("");
+  async function runBatch() {
+    setBatchMsg("running...");
+    try {
+      const r = await api("/batch/run", { method: "POST", body: "{}" });
+      setBatchMsg(`scored ${r.scored}, flagged ${r.flagged}`);
+      load();
+    } catch (e) { setBatchMsg(e.message); }
+  }
+
   useEffect(() => {
     load();
     const t = setInterval(load, 3000);
@@ -156,7 +166,11 @@ function Alerts() {
           <h1>Alerts</h1>
           <p>Behavior anomalies detected by the PS08 risk engine.</p>
         </div>
-        <div className="live-chip"><i /> LIVE · 3s refresh</div>
+        <div>
+          <div className="live-chip"><i /> LIVE · 3s refresh</div>
+          <button onClick={runBatch}>Run batch scan</button>
+          {batchMsg && <small> {batchMsg}</small>}
+        </div>
       </div>
 
       {error && <div className="error">{error}</div>}
