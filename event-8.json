@@ -1,0 +1,9 @@
+﻿{
+  "actor_id": "attack-simulation-001",
+  "resource_id": "sensitive-db-8",
+  "resource_type": "database",
+  "metadata": {
+    "action": "read",
+    "source": "rate-anomaly-test"
+  }
+}
