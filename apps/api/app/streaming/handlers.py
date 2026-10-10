@@ -1,5 +1,5 @@
-from datetime import datetime, timezone
 import logging
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class SecurityEventHandler:
                 actor_id,
                 resource_id,
                 resource_type,
-                datetime.now(timezone.utc),
+                datetime.now(UTC),
             )
 
         novelty_score = self.graph.novelty_score(novelty)

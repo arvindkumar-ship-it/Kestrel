@@ -1,4 +1,5 @@
-﻿from functools import lru_cache
+from collections.abc import AsyncIterator
+from functools import lru_cache
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -9,7 +10,11 @@ from app.insider.baseline import RollingBaseline
 from app.insider.graph_store import GraphStore
 from app.insider.rate_window import RateWindow
 from app.response.session_revoke import SessionRevokeAdapter
-from app.security.api_abuse import AuthAnomalyDetector, RateAbuseDetector, SchemaDriftDetector
+from app.security.api_abuse import (
+    AuthAnomalyDetector,
+    RateAbuseDetector,
+    SchemaDriftDetector,
+)
 from app.streaming.alert_bus import AlertBus
 from app.streaming.ws_auth import WSTicketAuth
 
@@ -25,7 +30,7 @@ async def close_redis() -> None:
     await redis_client.aclose()
 
 
-async def get_db_session() -> AsyncSession:
+async def get_db_session() -> AsyncIterator[AsyncSession]:
     async with SessionFactory() as session:
         yield session
 

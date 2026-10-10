@@ -1,9 +1,15 @@
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
+from app.auth import Principal, require_operator
 from app.dependencies import get_ws_ticket_auth
 from app.streaming.ws_auth import WSTicketAuth
 
 router = APIRouter(tags=["ws"])
+
+
+@router.post("/ws/ticket")
+async def issue_ticket(principal: Principal = Depends(require_operator), ws_auth: WSTicketAuth = Depends(get_ws_ticket_auth)) -> dict:
+    return {"ticket": await ws_auth.issue_ticket(principal.subject)}
 
 
 @router.websocket("/ws/alerts")

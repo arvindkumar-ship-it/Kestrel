@@ -7,17 +7,14 @@ bus.
 
 ## Services
 
-| Service            | Entry point                     | Purpose                                           |
-|---------------------|----------------------------------|----------------------------------------------------|
-| `api`               | `uvicorn app.main:app`          | FastAPI HTTP + WebSocket API                       |
-| `relay`              | `python -m app.outbox_relay`    | Transactional outbox → event bus relay             |
-| `detection-worker`  | `python -m app.detection_worker`| Graph/isolation-forest/ensemble scoring + alerting |
-| `response-worker`   | `python -m app.response_worker` | Executes response actions (block/quarantine/revoke)|
-| `postgres`          | —                                | Primary store (events, graph projection, alerts)   |
-| `redis`              | —                                | Streams, pub/sub, rate windows, websocket tickets   |
+| Service | Entry point | Purpose |
+|---|---|---|
+| API | `uvicorn app.main:app --app-dir apps/api --port 8010` | Authenticated HTTP and WebSocket APIs |
+| Stream worker | `PYTHONPATH=apps/api python -m app.worker` | Outbox relay and event consumer |
+| PostgreSQL 17 | Docker Compose | Durable events, alerts and outbox |
+| Redis 8 | Docker Compose | Streams, ticket redemption and revocation |
 
-Frontend (Next.js dashboard) is deployed separately; see its own env vars
-below.
+The Vite/React console is in `frontend/frontend` (`npm ci`, `npm run dev`). Its `VITE_API_BASE` defaults to `http://localhost:8010/api/v1`. Enter a configured issuer's operator/admin JWT in the console. Production requires one tenant per deployment and a trusted JWKS endpoint.
 
 ## Prerequisites
 
@@ -30,10 +27,10 @@ below.
 
 ```bash
 cp .env.example .env        # fill in real secrets — never commit .env
-make up                     # builds images, starts postgres/redis/api/workers
+make up                     # builds images, starts postgres/redis/api; run the worker separately
 make migrate                # alembic upgrade head (not run automatically on boot)
-curl http://localhost:8000/health/live
-curl http://localhost:8000/health/ready
+curl http://localhost:8001/api/v1/health/live
+curl http://localhost:8001/api/v1/health/ready
 ```
 
 `make down` stops everything; `make logs` tails all service logs.
@@ -43,7 +40,9 @@ curl http://localhost:8000/health/ready
 ```bash
 make install
 make migrate
-uvicorn app.main:app --reload --app-dir apps/api
+uvicorn app.main:app --reload --app-dir apps/api --port 8010
+# Separate terminal with the same DATABASE_URL / REDIS_URL:
+PYTHONPATH=apps/api python -m app.worker
 ```
 
 ## Testing & quality gates
@@ -99,3 +98,7 @@ infra scaffolding for local development. Application source
 (`apps/api/app/...`) is tracked separately — see the project history for
 the module-by-module build log (ingestion, graph store, detection ensemble,
 response engine, observability, security tests).
+
+Audit repair scope, reproducible checks and remaining limitations: [AUDIT_FIXES.md](AUDIT_FIXES.md).
+
+Docker Compose exposes PostgreSQL at localhost:5434 and the API at localhost:8001. For host-run migrations/workers, set DATABASE_URL to that host port and VITE_API_BASE to the API you actually run. Authenticated simulator requests also need an operator token; the old unauthenticated simulator is not a working production ingest path.

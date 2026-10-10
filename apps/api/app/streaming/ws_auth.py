@@ -20,7 +20,4 @@ class WSTicketAuth:
 
     async def redeem_ticket(self, ticket: str) -> str | None:
         key = f"{TICKET_PREFIX}{ticket}"
-        principal_id = await self.redis.get(key)
-        if principal_id is not None:
-            await self.redis.delete(key)  # single-use
-        return principal_id
+        return await self.redis.getdel(key)

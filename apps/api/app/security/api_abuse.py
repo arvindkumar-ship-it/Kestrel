@@ -1,7 +1,7 @@
 import logging
 import math
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 
@@ -28,7 +28,7 @@ class RateAbuseDetector:
         self.redis = redis
 
     async def check(self, api_key: str) -> AbuseSignal | None:
-        now = int(datetime.now(timezone.utc).timestamp())
+        now = int(datetime.now(UTC).timestamp())
         window_key = f"{RATE_KEY_PREFIX}{api_key}:{now // RATE_WINDOW_SECONDS}"
         count = await self.redis.incr(window_key)
         await self.redis.expire(window_key, RATE_WINDOW_SECONDS * 2)

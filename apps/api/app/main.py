@@ -165,12 +165,17 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.v1 import batch, dashboard, events, health, response, ws
 from app.config import get_settings
-from app.dependencies import close_redis, get_rate_abuse_detector, get_revoke_adapter, get_schema_drift_detector
+from app.dependencies import (
+    close_redis,
+    get_rate_abuse_detector,
+    get_revoke_adapter,
+    get_schema_drift_detector,
+)
 from app.middleware.api_abuse_check import enforce_api_abuse_checks
 from app.middleware.revocation_check import enforce_revocation_check
 from app.tasks import isolation_forest_loop

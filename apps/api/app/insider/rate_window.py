@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 
@@ -12,7 +12,7 @@ class RateWindow:
         self.redis = redis
 
     async def increment(self, actor_id: str) -> int:
-        now = int(datetime.now(timezone.utc).timestamp())
+        now = int(datetime.now(UTC).timestamp())
         key = f"rate:{actor_id}:{now // WINDOW_SECONDS}"
         count = await self.redis.incr(key)
         await self.redis.expire(key, WINDOW_SECONDS * 2)

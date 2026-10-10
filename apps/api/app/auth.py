@@ -53,6 +53,8 @@ def decode_token(token: str) -> dict:
 
 
 async def get_current_principal(request: Request) -> Principal:
+    if getattr(request.state, "principal", None) is not None:
+        return request.state.principal
     auth_header = request.headers.get("authorization", "")
     if not auth_header.lower().startswith("bearer "):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
@@ -62,9 +64,22 @@ async def get_current_principal(request: Request) -> Principal:
     except Exception as exc:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="invalid token") from exc
 
+    if (not isinstance(claims.get("sub"), str) or not claims["sub"]
+            or not isinstance(claims.get("roles", []), list)
+            or any(not isinstance(role, str) for role in claims.get("roles", []))):
+        raise HTTPException(401, "invalid principal claims")
+    if settings.deployment_tenant_id and claims.get("tenant_id") != settings.deployment_tenant_id:
+        raise HTTPException(403, "token tenant does not match this deployment")
     return Principal(
         subject=claims["sub"],
         tenant_id=claims.get("tenant_id", claims["sub"]),
         roles=claims.get("roles", []),
         claims=claims,
     )
+
+
+async def require_operator(request: Request) -> Principal:
+    principal = await get_current_principal(request)
+    if not set(principal.roles) & {"operator", "admin"}:
+        raise HTTPException(403, "operator role required")
+    return principal

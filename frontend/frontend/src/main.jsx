@@ -744,10 +744,12 @@ import "./styles.css";
 
 const API = import.meta.env.VITE_API_BASE || "http://localhost:8010/api/v1";
 
+let operatorToken = "";
+
 async function api(path, options = {}) {
   const res = await fetch(`${API}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
+    headers: { "Content-Type": "application/json", ...(operatorToken ? { Authorization: `Bearer ${operatorToken}` } : {}), ...(options.headers || {}) },
   });
   const text = await res.text();
   let data;
@@ -1106,6 +1108,22 @@ function Health() {
 
 function App() {
   const [page, setPage] = useState("alerts");
+  const [token, setToken] = useState("");
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authError, setAuthError] = useState("");
+  async function authenticate(event) {
+    event.preventDefault();
+    operatorToken = token.trim();
+    try { await api("/dashboard/alerts"); setAuthenticated(true); setAuthError(""); }
+    catch (error) { operatorToken = ""; setAuthError(error.message); }
+  }
+  if (!authenticated) return (
+    <main><h1>Kestrel operator access</h1>
+      <p>Use an operator or admin JWT from your configured issuer. The token stays in memory.</p>
+      <form onSubmit={authenticate}><label>Access token <input type="password" value={token} onChange={event => setToken(event.target.value)} required autoComplete="off" /></label><button type="submit">Connect</button></form>
+      {authError && <p role="alert">{authError}</p>}
+    </main>
+  );
   return (
     <div className="app">
       <aside>

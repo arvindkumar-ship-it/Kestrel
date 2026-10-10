@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +39,7 @@ class SessionRevokeAdapter:
         await self.redis.set(f"{REVOKE_KEY_PREFIX}{session_id}", reason)
         session.add(
             RevokedSession(
-                session_id=session_id, reason=reason, actor=actor, revoked_at=datetime.now(timezone.utc)
+                session_id=session_id, reason=reason, actor=actor, revoked_at=datetime.now(UTC)
             )
         )
         await session.commit()

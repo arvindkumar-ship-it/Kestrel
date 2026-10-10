@@ -32,10 +32,13 @@ class Settings(BaseSettings):
     jwt_audience: str = ""
     jwt_jwks_url: str = ""
     jwt_local_secret: str = ""  # HS256 fallback for local/test envs only
+    deployment_tenant_id: str = ""  # One tenant per deployment; required in production.
 
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
         if self.app_env == "production":
+            if not self.deployment_tenant_id or not self.jwt_jwks_url:
+                raise ValueError("production requires deployment_tenant_id and jwt_jwks_url")
             if self.debug:
                 raise ValueError("debug cannot be enabled in production")
             if self.allow_dry_run_responses:

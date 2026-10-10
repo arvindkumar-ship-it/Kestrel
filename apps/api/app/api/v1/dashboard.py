@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_operator
 from app.dependencies import get_db_session
 from app.persistence.models import Alert
 
-router = APIRouter(tags=["dashboard"])
+router = APIRouter(tags=["dashboard"], dependencies=[Depends(require_operator)])
 
 
 @router.get("/dashboard/alerts")

@@ -1,8 +1,6 @@
 import asyncio
 import logging
 
-from app.config import get_settings
-
 logger = logging.getLogger(__name__)
 
 BATCH_ALERT_THRESHOLD = 0.7
@@ -30,7 +28,7 @@ async def _run_isolation_forest(session_factory=None, alert_bus=None) -> dict:
     scores = await asyncio.to_thread(IsolationForestJob().score, matrix)  # keep event loop free
 
     flagged = 0
-    for actor_id, score in zip(actor_ids, scores):
+    for actor_id, score in zip(actor_ids, scores, strict=True):
         if score > BATCH_ALERT_THRESHOLD:
             flagged += 1
             await alert_bus.publish(

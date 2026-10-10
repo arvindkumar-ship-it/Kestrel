@@ -43,8 +43,8 @@ migrate-cycle:
 
 up:
 	docker compose up --build -d
-	@echo "api:    http://localhost:8000"
-	@echo "health: http://localhost:8000/health/live"
+	@echo "api:    http://localhost:8001"
+	@echo "health: http://localhost:8001/api/v1/health/live"
 
 down:
 	docker compose down
