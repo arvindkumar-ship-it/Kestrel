@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 
+from redis.exceptions import WatchError
 from sqlalchemy import select
 
 from app.persistence.models import OutboxEvent
@@ -29,12 +30,29 @@ class OutboxRelay:
     async def _relay_batch(self) -> None:
         async with self.session_factory() as session:
             result = await session.execute(
-                select(OutboxEvent).where(OutboxEvent.published.is_(False)).limit(BATCH_SIZE)
+                select(OutboxEvent).where(OutboxEvent.published.is_(False)).order_by(OutboxEvent.id).limit(BATCH_SIZE).with_for_update(skip_locked=True)
             )
             rows = result.scalars().all()
             for row in rows:
-                payload = json.dumps({"event_type": row.event_type, **row.payload})
-                await self.redis.xadd(STREAM_KEY, {"payload": payload})
+                await self._publish_once(row)
                 row.published = True
             if rows:
                 await session.commit()
+
+    async def _publish_once(self, row) -> None:
+        """Append and mark atomically in Redis; retain markers during outbox replay."""
+        key = f"ps08:outbox:published:{row.id}"
+        payload = json.dumps({**row.payload, "event_type": row.event_type, "event_id": f"outbox:{row.id}"})
+        while True:
+            async with self.redis.pipeline(transaction=True) as pipe:
+                try:
+                    await pipe.watch(key)
+                    if await pipe.exists(key):
+                        return
+                    pipe.multi()
+                    pipe.xadd(STREAM_KEY, {"payload": payload})
+                    pipe.set(key, "1")
+                    await pipe.execute()
+                    return
+                except WatchError:
+                    continue

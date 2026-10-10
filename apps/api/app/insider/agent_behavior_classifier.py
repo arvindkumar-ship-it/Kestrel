@@ -1,5 +1,7 @@
+from collections.abc import Awaitable
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
+from typing import cast
 
 from redis.asyncio import Redis
 
@@ -8,7 +10,7 @@ LOOP_WINDOW = 4
 HISTORY_TTL_SECONDS = 3600
 
 
-class BehaviorFlag(str, Enum):
+class BehaviorFlag(StrEnum):
     NORMAL = "normal"
     TOOL_CALL_LOOP = "tool_call_loop"
 
@@ -29,10 +31,10 @@ class AgentBehaviorClassifier:
 
     async def record_call(self, agent_id: str, session_id: str, tool_name: str) -> BehaviorResult:
         key = f"agent_calls:{agent_id}:{session_id}"
-        await self.redis.rpush(key, tool_name)
-        await self.redis.ltrim(key, -LOOP_WINDOW, -1)
+        await cast(Awaitable[int], self.redis.rpush(key, tool_name))
+        await cast(Awaitable[str], self.redis.ltrim(key, -LOOP_WINDOW, -1))
         await self.redis.expire(key, HISTORY_TTL_SECONDS)
-        history = await self.redis.lrange(key, 0, -1)
+        history = await cast(Awaitable[list[str]], self.redis.lrange(key, 0, -1))
 
         if len(history) < MIN_SAMPLES:
             return BehaviorResult(BehaviorFlag.NORMAL)

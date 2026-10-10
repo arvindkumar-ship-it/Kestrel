@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import random
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ async def _ingest(actor: str, resource: str, rtype: str, session_factory=None) -
                 "actor_id": actor,
                 "resource_id": resource,
                 "resource_type": rtype,
-                "occurred_at": datetime.now(timezone.utc).isoformat(),
+                "occurred_at": datetime.now(UTC).isoformat(),
             },
         )
 
@@ -51,7 +51,7 @@ async def seed_baseline(session_factory=None, graph=None) -> None:
     async with (session_factory or SessionFactory)() as session:
         for actor in ACTORS:
             for rid, rtype in COMMON:
-                await graph.record_access(session, actor, rid, rtype, datetime.now(timezone.utc))
+                await graph.record_access(session, actor, rid, rtype, datetime.now(UTC))
     _seeded = True
 
 

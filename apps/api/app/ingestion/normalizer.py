@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from app.domain.events import AccessEvent
 
@@ -9,7 +9,7 @@ def normalize(raw: dict) -> AccessEvent:
         resource_id=str(raw["resource_id"]),
         resource_type=str(raw.get("resource_type", "unknown")),
         occurred_at=(
-            datetime.fromisoformat(raw["occurred_at"]) if "occurred_at" in raw else datetime.now(timezone.utc)
+            datetime.fromisoformat(raw["occurred_at"]) if "occurred_at" in raw else datetime.now(UTC)
         ),
         metadata=raw.get("metadata", {}),
     )

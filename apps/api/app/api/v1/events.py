@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth import require_operator
 from app.dependencies import get_db_session
 from app.ingestion.service import IngestionService
 
-router = APIRouter(tags=["events"])
+router = APIRouter(tags=["events"], dependencies=[Depends(require_operator)])
 
 
 @router.post("/events")

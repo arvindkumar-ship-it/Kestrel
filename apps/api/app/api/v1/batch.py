@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 
+from app.auth import require_operator
 from app.config import get_settings
 from app.tasks import _run_isolation_forest
 
-router = APIRouter(tags=["batch"])
+router = APIRouter(tags=["batch"], dependencies=[Depends(require_operator)])
 
 
 @router.post("/batch/run")

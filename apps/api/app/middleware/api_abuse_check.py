@@ -12,15 +12,24 @@ async def enforce_api_abuse_checks(
     rate_detector: RateAbuseDetector,
     schema_detector: SchemaDriftDetector,
 ) -> None:
-    api_key = request.headers.get("x-api-key", "anonymous")
+    principal = getattr(request.state, "principal", None)
+    api_key = principal.subject if principal is not None else "anonymous"
 
     signal = await rate_detector.check(api_key)
     if signal and signal.confidence > 0.8:
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, detail=signal.detail)
 
     if request.method in ("POST", "PUT", "PATCH"):
-        body = await request.json()
-        declared = getattr(request.state, "declared_schema_params", set())
+        raw = await request.body()
+        if not raw or request.headers.get("content-type", "").split(";")[0] != "application/json":
+            return
+        try:
+            body = await request.json()
+        except ValueError as exc:
+            raise HTTPException(400, "invalid JSON body") from exc
+        if not isinstance(body, dict):
+            raise HTTPException(400, "JSON body must be an object")
+        declared: set[str] = getattr(request.state, "declared_schema_params", set())
         if declared:
             schema_signal = schema_detector.check(declared, set(body.keys()))
             if schema_signal and schema_signal.confidence > 0.7:
