@@ -6,15 +6,14 @@ from unittest.mock import AsyncMock
 
 import jwt
 import pytest
-from fastapi import HTTPException
-from starlette.requests import Request
-
 from app.auth import settings
 from app.middleware.api_abuse_check import enforce_api_abuse_checks
 from app.middleware.revocation_check import enforce_revocation_check
 from app.streaming.consumer import DEAD_LETTER_KEY, GROUP, STREAM_KEY, EventConsumer
 from app.streaming.outbox_relay import OutboxRelay
 from app.streaming.ws_auth import WSTicketAuth
+from fastapi import HTTPException
+from starlette.requests import Request
 
 
 async def test_ticket_has_only_one_concurrent_redeemer(redis):
